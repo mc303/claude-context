@@ -4,7 +4,7 @@ export interface ContextMcpConfig {
     name: string;
     version: string;
     // Embedding provider configuration
-    embeddingProvider: 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama';
+    embeddingProvider: 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama' | 'MiniLM';
     embeddingModel: string;
     // Provider-specific API keys
     openaiApiKey?: string;
@@ -14,6 +14,8 @@ export interface ContextMcpConfig {
     // Ollama configuration
     ollamaModel?: string;
     ollamaHost?: string;
+    // MiniLM configuration
+    minilmModel?: string;
     // Vector database configuration
     milvusAddress?: string; // Optional, can be auto-resolved from token
     milvusToken?: string;
@@ -36,6 +38,8 @@ export function getDefaultModelForProvider(provider: string): string {
             return 'gemini-embedding-001';
         case 'Ollama':
             return 'nomic-embed-text';
+        case 'MiniLM':
+            return 'Xenova/all-MiniLM-L6-v2';
         default:
             return 'text-embedding-3-small';
     }
@@ -49,6 +53,11 @@ export function getEmbeddingModelForProvider(provider: string): string {
             const ollamaModel = envManager.get('OLLAMA_MODEL') || envManager.get('EMBEDDING_MODEL') || getDefaultModelForProvider(provider);
             console.log(`[DEBUG] 🎯 Ollama model selection: OLLAMA_MODEL=${envManager.get('OLLAMA_MODEL') || 'NOT SET'}, EMBEDDING_MODEL=${envManager.get('EMBEDDING_MODEL') || 'NOT SET'}, selected=${ollamaModel}`);
             return ollamaModel;
+        case 'MiniLM':
+            // For MiniLM, prioritize MINILM_MODEL over EMBEDDING_MODEL
+            const minilmModel = envManager.get('MINILM_MODEL') || envManager.get('EMBEDDING_MODEL') || getDefaultModelForProvider(provider);
+            console.log(`[DEBUG] 🎯 MiniLM model selection: MINILM_MODEL=${envManager.get('MINILM_MODEL') || 'NOT SET'}, EMBEDDING_MODEL=${envManager.get('EMBEDDING_MODEL') || 'NOT SET'}, selected=${minilmModel}`);
+            return minilmModel;
         case 'OpenAI':
         case 'VoyageAI':
         case 'Gemini':
@@ -64,6 +73,7 @@ export function createMcpConfig(): ContextMcpConfig {
     console.log(`[DEBUG]   EMBEDDING_PROVIDER: ${envManager.get('EMBEDDING_PROVIDER') || 'NOT SET'}`);
     console.log(`[DEBUG]   EMBEDDING_MODEL: ${envManager.get('EMBEDDING_MODEL') || 'NOT SET'}`);
     console.log(`[DEBUG]   OLLAMA_MODEL: ${envManager.get('OLLAMA_MODEL') || 'NOT SET'}`);
+    console.log(`[DEBUG]   MINILM_MODEL: ${envManager.get('MINILM_MODEL') || 'NOT SET'}`);
     console.log(`[DEBUG]   GEMINI_API_KEY: ${envManager.get('GEMINI_API_KEY') ? 'SET (length: ' + envManager.get('GEMINI_API_KEY')!.length + ')' : 'NOT SET'}`);
     console.log(`[DEBUG]   OPENAI_API_KEY: ${envManager.get('OPENAI_API_KEY') ? 'SET (length: ' + envManager.get('OPENAI_API_KEY')!.length + ')' : 'NOT SET'}`);
     console.log(`[DEBUG]   MILVUS_ADDRESS: ${envManager.get('MILVUS_ADDRESS') || 'NOT SET'}`);
@@ -73,7 +83,7 @@ export function createMcpConfig(): ContextMcpConfig {
         name: envManager.get('MCP_SERVER_NAME') || "Context MCP Server",
         version: envManager.get('MCP_SERVER_VERSION') || "1.0.0",
         // Embedding provider configuration
-        embeddingProvider: (envManager.get('EMBEDDING_PROVIDER') as 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama') || 'OpenAI',
+        embeddingProvider: (envManager.get('EMBEDDING_PROVIDER') as 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama' | 'MiniLM') || 'OpenAI',
         embeddingModel: getEmbeddingModelForProvider(envManager.get('EMBEDDING_PROVIDER') || 'OpenAI'),
         // Provider-specific API keys
         openaiApiKey: envManager.get('OPENAI_API_KEY'),
@@ -83,6 +93,8 @@ export function createMcpConfig(): ContextMcpConfig {
         // Ollama configuration
         ollamaModel: envManager.get('OLLAMA_MODEL'),
         ollamaHost: envManager.get('OLLAMA_HOST'),
+        // MiniLM configuration
+        minilmModel: envManager.get('MINILM_MODEL'),
         // Vector database configuration - address can be auto-resolved from token
         milvusAddress: envManager.get('MILVUS_ADDRESS'), // Optional, can be resolved from token
         milvusToken: envManager.get('MILVUS_TOKEN')
@@ -118,6 +130,9 @@ export function logConfigurationSummary(config: ContextMcpConfig): void {
             console.log(`[MCP]   Ollama Host: ${config.ollamaHost || 'http://127.0.0.1:11434'}`);
             console.log(`[MCP]   Ollama Model: ${config.embeddingModel}`);
             break;
+        case 'MiniLM':
+            console.log(`[MCP]   MiniLM Model: ${config.embeddingModel} (CPU-based, no API key required)`);
+            break;
     }
 
     console.log(`[MCP] 🔧 Initializing server components...`);
@@ -127,7 +142,7 @@ export function showHelpMessage(): void {
     console.log(`
 Context MCP Server
 
-Usage: npx @zilliz/claude-context-mcp@latest [options]
+Usage: npx @dannyboy2042/claude-context-mcp@latest [options]
 
 Options:
   --help, -h                          Show this help message
@@ -135,39 +150,52 @@ Options:
 Environment Variables:
   MCP_SERVER_NAME         Server name
   MCP_SERVER_VERSION      Server version
-  
+
   Embedding Provider Configuration:
-  EMBEDDING_PROVIDER      Embedding provider: OpenAI, VoyageAI, Gemini, Ollama (default: OpenAI)
+  EMBEDDING_PROVIDER      Embedding provider: OpenAI, VoyageAI, Gemini, Ollama, MiniLM (default: OpenAI)
   EMBEDDING_MODEL         Embedding model name (auto-detected if not specified)
-  
+
   Provider-specific API Keys:
   OPENAI_API_KEY          OpenAI API key (required for OpenAI provider)
   OPENAI_BASE_URL         OpenAI API base URL (optional, for custom endpoints)
   VOYAGEAI_API_KEY        VoyageAI API key (required for VoyageAI provider)
   GEMINI_API_KEY          Google AI API key (required for Gemini provider)
-  
+
   Ollama Configuration:
   OLLAMA_HOST             Ollama server host (default: http://127.0.0.1:11434)
   OLLAMA_MODEL            Ollama model name (default: nomic-embed-text)
-  
+
+  MiniLM Configuration (CPU-based, no API key required):
+  MINILM_MODEL            MiniLM model name (default: Xenova/all-MiniLM-L6-v2)
+
   Vector Database Configuration:
-  MILVUS_ADDRESS          Milvus address (optional, can be auto-resolved from token)
-  MILVUS_TOKEN            Milvus token (optional, used for authentication and address resolution)
+  LANCEDB_URI             LanceDB storage path (default: ~/.claude-context/lancedb)
+  MILVUS_ADDRESS          Milvus address (optional, for cloud deployment)
+  MILVUS_TOKEN            Milvus/Zilliz token (optional, for cloud deployment)
 
 Examples:
-  # Start MCP server with OpenAI (default) and explicit Milvus address
-  OPENAI_API_KEY=sk-xxx MILVUS_ADDRESS=localhost:19530 npx @zilliz/claude-context-mcp@latest
-  
-  # Start MCP server with OpenAI and auto-resolve Milvus address from token
-  OPENAI_API_KEY=sk-xxx MILVUS_TOKEN=your-zilliz-token npx @zilliz/claude-context-mcp@latest
-  
-  # Start MCP server with VoyageAI
-  EMBEDDING_PROVIDER=VoyageAI VOYAGEAI_API_KEY=pa-xxx MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
-  
-  # Start MCP server with Gemini
-  EMBEDDING_PROVIDER=Gemini GEMINI_API_KEY=xxx MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
-  
-  # Start MCP server with Ollama
-  EMBEDDING_PROVIDER=Ollama EMBEDDING_MODEL=nomic-embed-text MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
+  # Start with MiniLM + LanceDB (NO API keys required - fully local)
+  EMBEDDING_PROVIDER=MiniLM npx @dannyboy2042/claude-context-mcp@latest
+
+  # Start with MiniLM + LanceDB using your fork
+  EMBEDDING_PROVIDER=MiniLM npx <your-username>/claude-context-mcp@latest
+
+  # Start with MiniLM + LanceDB from local build
+  cd packages/mcp && EMBEDDING_PROVIDER=MiniLM npm start
+
+  # Start with OpenAI + LanceDB
+  OPENAI_API_KEY=sk-xxx npx @dannyboy2042/claude-context-mcp@latest
+
+  # Start with MiniLM + Milvus Cloud
+  EMBEDDING_PROVIDER=MiniLM MILVUS_TOKEN=your-zilliz-token npx @dannyboy2042/claude-context-mcp@latest
+
+  # Start with OpenAI + Milvus Cloud
+  OPENAI_API_KEY=sk-xxx MILVUS_TOKEN=your-zilliz-token npx @dannyboy2042/claude-context-mcp@latest
+
+  # Start with Ollama + LanceDB
+  EMBEDDING_PROVIDER=Ollama npx @dannyboy2042/claude-context-mcp@latest
+
+  # Configure for Claude Code MCP
+  claude mcp add claude-context -e EMBEDDING_PROVIDER=MiniLM -- npx @dannyboy2042/claude-context-mcp@latest
         `);
 } 
