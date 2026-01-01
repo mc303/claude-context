@@ -32,6 +32,11 @@
         "url": "^0.11.4",
         "vm-browserify": "^1.1.2"
     },
+    "pnpm": {
+        "overrides": {
+            "sharp": "^0.34.5"
+        }
+    },
     "engines": {
         "node": ">=20.0.0",
         "pnpm": ">=10.0.0"

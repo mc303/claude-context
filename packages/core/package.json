@@ -24,6 +24,7 @@
         "langchain": "^0.3.27",
         "ollama": "^0.5.16",
         "openai": "^5.1.1",
+        "sharp": "^0.34.5",
         "tree-sitter": "^0.21.1",
         "tree-sitter-cpp": "^0.22.0",
         "tree-sitter-go": "^0.21.0",
